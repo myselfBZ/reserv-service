@@ -46,20 +46,60 @@ type OrderStore struct {
 	db *sql.DB
 }
 
-func (s *OrderStore) Delete(ctx context.Context, id string) error {
-	q := `DELETE FROM orders WHERE id = $1`
+
+func (s *OrderStore) GetByIdempotencyKey(ctx context.Context, userId, key string) (*Order, error) {
+	q := `SELECT 
+			id, 
+			user_id, 
+			total_price, 
+			status, 
+			placed_at 
+		FROM orders WHERE user_id = $1 AND idempotency_key = $2`
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
-	_, err := s.db.ExecContext(ctx, q, id)
+
+	var o Order
+	err := s.db.QueryRowContext(ctx, q, userId, key).Scan(
+		&o.Id,
+		&o.UserId,
+		&o.TotalPrice,
+		&o.Status,
+		&o.PlacedAt,
+	)
 	if err != nil {
 		switch err {
 		case sql.ErrNoRows:
-			return ErrResourceNotFound
+			return nil, ErrResourceNotFound
 		default:
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	r, err := s.db.QueryContext(ctx, `SELECT * FROM order_items WHERE order_id = $1`, o.Id)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+			return nil, ErrResourceNotFound
+		}
+		return nil, err
+	}
+	items := []OrderItem{}
+	for r.Next() {
+		var it OrderItem
+		err := r.Scan(
+			&it.OrderId,
+			&it.ProductId,
+			&it.Quantity,
+			&it.UnitPrice,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, it)
+	}
+	o.OrderItems = items
+	return &o, nil
 }
 
 func (s *OrderStore) GetById(ctx context.Context, id string) (*Order, error) {
