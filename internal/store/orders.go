@@ -9,11 +9,19 @@ import (
 	"github.com/lib/pq"
 )
 
-
-var(
-	ErrInvalidProductId = errors.New("invalid product id: product does not exist")
-	ErrInsufficientStock = errors.New("insufficient stock quantity in the inventory")
+var (
+	ErrOrderCannotBeCancelled  = errors.New("order can't be cancelled")
+	ErrInvalidProductId        = errors.New("invalid product id: product does not exist")
+	ErrInsufficientStock       = errors.New("insufficient stock quantity in the inventory")
 	ErrDuplicateIdempotencyKey = errors.New("duplicate idempotency key")
+)
+
+type OrderStatus string
+
+const (
+	OrderStatusPending   = "pending"
+	OrderStatusConfirmed = "confirmed"
+	OrderStatusCancelled = "cancelled"
 )
 
 type OrderItem struct {
@@ -24,12 +32,12 @@ type OrderItem struct {
 }
 
 type Order struct {
-	Id             string    `json:"id"`
-	UserId         string    `json:"user_id"`
-	IdempotencyKey string    `json:"idempotency_key"`
-	TotalPrice     float64   `json:"total_price"`
-	Status         string    `json:"status"`
-	PlacedAt       time.Time `json:"placed_at"`
+	Id             string      `json:"id"`
+	UserId         string      `json:"user_id"`
+	IdempotencyKey string      `json:"idempotency_key"`
+	TotalPrice     float64     `json:"total_price"`
+	Status         OrderStatus `json:"status"`
+	PlacedAt       time.Time   `json:"placed_at"`
 
 	OrderItems []OrderItem `json:"order_items"`
 }
@@ -77,7 +85,6 @@ func (s *OrderStore) GetById(ctx context.Context, id string) (*Order, error) {
 	}
 	return &o, nil
 }
-
 
 func (s *OrderStore) Create(ctx context.Context, o *Order) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
@@ -139,7 +146,7 @@ func (s *OrderStore) Create(ctx context.Context, o *Order) (err error) {
 	}
 
 	for _, it := range o.OrderItems {
-		err = s.CreateOrderItem(ctx, tx, o.Id, &it)
+		err = s.createOrderItem(ctx, tx, o.Id, &it)
 		if err != nil {
 			return err
 		}
@@ -157,7 +164,25 @@ func (s *OrderStore) Create(ctx context.Context, o *Order) (err error) {
 	return tx.Commit()
 }
 
-func (s *OrderStore) CreateOrderItem(ctx context.Context, tx *sql.Tx, orderId string, it *OrderItem) error {
+func (s *OrderStore) Confirm(ctx context.Context, orderId string) error {
+	q := `UPDATE order SET status = 'confirmed' WHERE id = $1 AND status NOT IN ('cancelled', 'confirmed')`
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer cancel()
+	r, err := s.db.ExecContext(ctx, q, orderId)
+	if err != nil {
+		return err
+	}
+	n, err := r.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrResourceNotFound
+	}
+	return nil
+}
+
+func (s *OrderStore) createOrderItem(ctx context.Context, tx *sql.Tx, orderId string, it *OrderItem) error {
 	query := `
 		INSERT INTO order_items (order_id, product_id, quantity, unit_price)
 		VALUES ($1, $2, $3, $4)
@@ -166,10 +191,10 @@ func (s *OrderStore) CreateOrderItem(ctx context.Context, tx *sql.Tx, orderId st
 	_, err := tx.ExecContext(
 		ctx,
 		query,
-		orderId,          
-		it.ProductId, 
-		it.Quantity, 
-		it.UnitPrice, 
+		orderId,
+		it.ProductId,
+		it.Quantity,
+		it.UnitPrice,
 	)
 	if err != nil {
 		var pqErr *pq.Error
@@ -179,4 +204,69 @@ func (s *OrderStore) CreateOrderItem(ctx context.Context, tx *sql.Tx, orderId st
 		return err
 	}
 	return nil
+}
+
+func (s *OrderStore) Cancel(ctx context.Context, orderId string) error {
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer cancel()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	r, err := tx.QueryContext(ctx, `SELECT * FROM order_items WHERE order_id = $1`, orderId)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+			return ErrResourceNotFound
+		}
+		return err
+	}
+	items := []OrderItem{}
+	for r.Next() {
+		var it OrderItem
+		err := r.Scan(
+			&it.OrderId,
+			&it.ProductId,
+			&it.Quantity,
+			&it.UnitPrice,
+		)
+
+		if err != nil {
+			return err
+		}
+
+		items = append(items, it)
+	}
+	for _, it := range items {
+		_, err = tx.ExecContext(
+			ctx, 
+			`UPDATE products SET stock_quantity = stock_quantity + $1 WHERE id = $2`, 
+			it.Quantity, 
+			it.ProductId,
+		)
+
+		if err != nil {
+			return err
+		}
+	}
+	res, err := tx.ExecContext(
+		ctx, 
+		`UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status NOT IN ('cancelled', 'confirmed')`, 
+		orderId,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return ErrOrderCannotBeCancelled
+	}
+	return tx.Commit()
 }

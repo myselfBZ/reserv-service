@@ -28,7 +28,8 @@ type Storage struct {
 	Orders interface {
 		Create(context.Context, *Order) error
 		GetById(context.Context, string) (*Order, error)
-		Delete(context.Context, string) error
+		Cancel(context.Context, string) error
+		Confirm(context.Context, string) error
 	}
 
 	Products interface {
