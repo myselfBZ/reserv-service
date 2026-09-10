@@ -19,7 +19,7 @@ import (
 
 type api struct {
 	cfg    config
-	store  store.Storage
+	store  *store.Storage
 	logger *zap.SugaredLogger
 }
 

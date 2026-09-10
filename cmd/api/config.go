@@ -1,7 +1,5 @@
 package main
 
-import "time"
-
 type dbCfg struct {
 	addr         string
 	maxOpenConns int
@@ -10,11 +8,9 @@ type dbCfg struct {
 }
 
 type authCfg struct {
-	accessSecret  string
-	refreshSecret string
-	iss           string
-	aud           string
-	exp           time.Duration
+	secret string
+	iss    string
+	aud    string
 }
 
 type config struct {
