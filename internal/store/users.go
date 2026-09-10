@@ -10,7 +10,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+
 var (
+	ErrUserNotFound   = errors.New("user not found")
 	ErrDuplicateEmail = errors.New("a user with that email already exists")
 )
 
@@ -53,14 +55,16 @@ func (s *UserStore) Create(ctx context.Context, u *User) error {
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
-	r, err := s.db.Exec(
+	err := s.db.QueryRowContext(
+		ctx,
 		q,
 		nullString(u.FirstName),
 		nullString(u.LastName),
 		nullString(u.Email),
 		nullString(string(u.Password.hash)),
+	).Scan(
+		&u.Id,
 	)
-
 	if err != nil {
 		switch {
 		case err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"`:
@@ -73,7 +77,27 @@ func (s *UserStore) Create(ctx context.Context, u *User) error {
 	return nil
 }
 
-
-
-
-
+func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error) {
+	q := `SELECT * FROM users WHERE email = $1`
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer cancel()
+	var user User
+	err := s.db.QueryRowContext(ctx, q, email).Scan(
+		&user.Id,
+		&user.FirstName,
+		&user.LastName,
+		&user.Email,
+		&user.Password,
+		&user.CreateAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			return nil, ErrUserNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &user, nil
+}

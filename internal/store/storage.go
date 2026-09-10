@@ -2,10 +2,17 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 var	QueryTimeoutDuration = time.Second * 5 
+
+func NewStorage(db *sql.DB) *Storage {
+	return &Storage{
+		Users: &UserStore{db: db},
+	}
+}
 
 type Storage struct {
 	Users interface {
