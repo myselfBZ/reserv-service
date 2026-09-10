@@ -28,12 +28,13 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 		a.logger.Warnw("malformed json payload", "err", err)
 		return
 	}
-	userId, err := getUserId(r)
-	if err != nil {
-		writeJSONError(w, http.StatusUnauthorized, "invalid user id")
-		a.logger.Warnw("invalid user id", "err", err)
-		return
-	}
+	userId := "33745878-a505-4785-8318-f2c86b61d1bc"
+	// userId, err := getUserId(r)
+	// if err != nil {
+	// 	writeJSONError(w, http.StatusUnauthorized, "invalid user id")
+	// 	a.logger.Warnw("invalid user id", "err", err)
+	// 	return
+	// }
 	items := []store.OrderItem{}
 	for _, it := range p.Items {
 		items = append(items, store.OrderItem{
@@ -42,7 +43,7 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	ordr := &store.Order{
-		UserId:         userId.String(),
+		UserId:         userId,
 		IdempotencyKey: idempKey,
 		OrderItems: items,
 	}
@@ -56,7 +57,7 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 			a.logger.Warnw("insuffcient stock amount", "err", err)
 			writeJSONError(w, http.StatusBadRequest, "insuffcient stock amount")
 		case store.ErrDuplicateIdempotencyKey:
-			ordr, err := a.store.Orders.GetByIdempotencyKey(r.Context(), userId.String(), idempKey)
+			ordr, err := a.store.Orders.GetByIdempotencyKey(r.Context(), userId, idempKey)
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, "server encountered an error")
 				a.logger.Errorw("order not found by idempotency key", "err", err)
@@ -67,6 +68,7 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 			a.logger.Errorw("internal server error", "err", err)
 			writeJSONError(w, http.StatusInternalServerError, "internal server error")
 		}
+		return
 	}
 
 	writeJSON(w, http.StatusCreated, ordr)

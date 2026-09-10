@@ -53,6 +53,7 @@ func (s *OrderStore) GetByIdempotencyKey(ctx context.Context, userId, key string
 			user_id, 
 			total_price, 
 			status, 
+			idempotency_key,
 			placed_at 
 		FROM orders WHERE user_id = $1 AND idempotency_key = $2`
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
@@ -64,6 +65,7 @@ func (s *OrderStore) GetByIdempotencyKey(ctx context.Context, userId, key string
 		&o.UserId,
 		&o.TotalPrice,
 		&o.Status,
+		&o.IdempotencyKey,
 		&o.PlacedAt,
 	)
 	if err != nil {
@@ -243,6 +245,7 @@ func (s *OrderStore) createOrderItem(ctx context.Context, tx *sql.Tx, orderId st
 		}
 		return err
 	}
+	it.OrderId = orderId
 	return nil
 }
 
