@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/myselfBZ/reserv-service/internal/auth"
 	"github.com/myselfBZ/reserv-service/internal/db"
 	"github.com/myselfBZ/reserv-service/internal/env"
 	"github.com/myselfBZ/reserv-service/internal/store"
@@ -21,14 +22,15 @@ func main() {
 				maxIdleTime:  env.GetString("MAX_IDLE_TIME", "15m"),
 			},
 			auth: authCfg{
-				secret: env.MustGetString("AUTH_SECRET"),
-				iss:    env.MustGetString("AUTH_ISS"),
-				aud:    env.MustGetString("AUTH_AUD"),
+				refreshSecret: env.MustGetString("AUTH_REFRESH_SECRET"),
+				secret:        env.MustGetString("AUTH_SECRET"),
+				iss:           env.GetString("AUTH_ISS", "reserv-service"),
+				aud:           env.GetString("AUTH_AUD", "users"),
 			},
 			cacheCfg: redisConfig{
-				addr:    env.GetString("REDIS_ADDR", "localhost:6379"),
-				pw:      env.GetString("REDIS_PW", ""),
-				db:      env.GetInt("REDIS_DB", 0),
+				addr: env.GetString("REDIS_ADDR", "localhost:6379"),
+				pw:   env.GetString("REDIS_PW", ""),
+				db:   env.GetInt("REDIS_DB", 0),
 			},
 		},
 		stop: make(chan struct{}),
@@ -40,7 +42,7 @@ func main() {
 	a.logger = logger
 
 	db, err := db.New(
-		a.cfg.db.addr, 
+		a.cfg.db.addr,
 		a.cfg.db.maxOpenConns,
 		a.cfg.db.maxIdleConns,
 		a.cfg.db.maxIdleTime,
@@ -52,12 +54,18 @@ func main() {
 	a.store = s
 
 	rdClient := cache.NewRedisClient(
-		a.cfg.cacheCfg.addr, 
-		a.cfg.cacheCfg.pw, 
+		a.cfg.cacheCfg.addr,
+		a.cfg.cacheCfg.pw,
 		a.cfg.cacheCfg.db,
 	)
 	a.cache = cache.New(rdClient)
 
+	a.auth = auth.NewJWTAuthenticator(
+		a.cfg.auth.secret,
+		a.cfg.auth.refreshSecret,
+		a.cfg.auth.aud,
+		a.cfg.auth.iss,
+	)
 	mux := a.mount()
 	logger.Fatal(a.run(mux))
 }

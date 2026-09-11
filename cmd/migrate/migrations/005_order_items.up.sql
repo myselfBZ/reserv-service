@@ -3,6 +3,7 @@ CREATE TABLE order_items (
     product_id UUID NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     unit_price NUMERIC(15, 2) NOT NULL CHECK (unit_price >= 0),
-    
+    idempotency_key VARCHAR(255) NOT NULL UNIQUE, 
+
     PRIMARY KEY (order_id, product_id)
 );

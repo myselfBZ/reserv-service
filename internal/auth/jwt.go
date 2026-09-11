@@ -30,7 +30,6 @@ type TokenPair struct {
 }
 
 func (a *JWTAuthenticator) GenerateTokenPair(userID string, customClaims map[string]any) (*TokenPair, error) {
-	// Access token (short-lived: 15 minutes)
 	accessClaims := jwt.MapClaims{
 		"sub": userID,
 		"aud": a.aud,
@@ -48,7 +47,6 @@ func (a *JWTAuthenticator) GenerateTokenPair(userID string, customClaims map[str
 		return nil, fmt.Errorf("failed to sign access token: %w", err)
 	}
 	
-	// Refresh token (long-lived: 7 days)
 	refreshClaims := jwt.MapClaims{
 		"sub": userID,
 		"aud": a.aud,
@@ -70,14 +68,12 @@ func (a *JWTAuthenticator) GenerateTokenPair(userID string, customClaims map[str
 	}, nil
 }
 
-// ValidateAccessToken validates the access token
 func (a *JWTAuthenticator) ValidateAccessToken(tokenString string) (*jwt.Token, error) {
 	return jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method %v", t.Header["alg"])
 		}
 		
-		// Verify it's an access token
 		if claims, ok := t.Claims.(jwt.MapClaims); ok {
 			if tokenType, exists := claims["type"]; !exists || tokenType != "access" {
 				return nil, fmt.Errorf("invalid token type")
@@ -99,7 +95,6 @@ func (a *JWTAuthenticator) ValidateRefreshToken(tokenString string) (*jwt.Token,
 			return nil, fmt.Errorf("unexpected signing method %v", t.Header["alg"])
 		}
 		
-		// Verify it's a refresh token
 		if claims, ok := t.Claims.(jwt.MapClaims); ok {
 			if tokenType, exists := claims["type"]; !exists || tokenType != "refresh" {
 				return nil, fmt.Errorf("invalid token type")
@@ -150,4 +145,3 @@ func (a *JWTAuthenticator) ExtractUserID(token *jwt.Token) (string, error) {
 	
 	return userID, nil
 }
-

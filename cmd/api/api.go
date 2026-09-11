@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/myselfBZ/reserv-service/internal/auth"
 	"github.com/myselfBZ/reserv-service/internal/env"
 	"github.com/myselfBZ/reserv-service/internal/store"
 	"github.com/myselfBZ/reserv-service/internal/store/cache"
@@ -22,6 +23,7 @@ type api struct {
 	cfg    config
 
 	cache  *cache.Cache
+	auth   auth.Authenticator
 	store  *store.Storage
 	logger *zap.SugaredLogger
 

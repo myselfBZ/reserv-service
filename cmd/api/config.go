@@ -14,9 +14,10 @@ type dbCfg struct {
 }
 
 type authCfg struct {
-	secret string
-	iss    string
-	aud    string
+	secret        string
+	refreshSecret string
+	iss           string
+	aud           string
 }
 
 type config struct {

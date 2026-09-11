@@ -1,4 +1,3 @@
-
 package auth
 
 import "github.com/golang-jwt/jwt/v5"
@@ -10,4 +9,3 @@ type Authenticator interface {
 	ExtractUserID(token *jwt.Token) (string, error)
 	GenerateAccessToken(userID string) (string, error)
 }
-
