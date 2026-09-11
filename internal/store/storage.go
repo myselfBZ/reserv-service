@@ -26,6 +26,7 @@ type Storage struct {
 		Cancel(context.Context, string) error
 		Confirm(context.Context, string) error
 		GetByIdempotencyKey(context.Context, string, string) (*Order, error)
+		CancelStale(ctx context.Context) ([]string, error) 
 	}
 
 	Products interface {

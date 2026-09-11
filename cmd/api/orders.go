@@ -10,6 +10,11 @@ import (
 	"github.com/myselfBZ/reserv-service/internal/store/cache"
 )
 
+
+var(
+	janitorInterval = time.Minute * 5
+)
+
 type placeOrderPayload struct {
 	Items []itemPayload `json:"items" validate:"required,min=1,dive"`
 }
@@ -170,4 +175,27 @@ func (a *api) getOrderByIdHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusOK, o)
+}
+
+func (a *api) cancelStaleOrdersJanitor() {
+	t := time.NewTicker(janitorInterval)
+
+	for {
+		select {
+		case <- t.C:
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
+			ids, err := a.store.Orders.CancelStale(ctx)
+			if err != nil {
+				a.logger.Errorw("cancelStaleOrders failed to cancel orders", "err", err)
+				cancel()
+				continue
+			}
+			a.cache.Orders.Delete(ctx, ids...)
+			cancel()
+		case <- a.stop:
+			t.Stop()
+			a.logger.Infow("stale orders janitor has stopped")
+			return
+		}
+	}
 }

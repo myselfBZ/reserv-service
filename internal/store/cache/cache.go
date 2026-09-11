@@ -18,7 +18,7 @@ type Cache struct {
 	Orders interface {
 		Set(ctx context.Context, o *store.Order) error
 		GetById(ctx context.Context, id string) (*store.Order, error)
-		Delete(ctx context.Context, id string) error
+		Delete(ctx context.Context, id ...string) error
 	}
 
 	// Products interface {

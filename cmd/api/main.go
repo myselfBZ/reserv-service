@@ -31,6 +31,7 @@ func main() {
 				db:      env.GetInt("REDIS_DB", 0),
 			},
 		},
+		stop: make(chan struct{}),
 	}
 
 	logger := zap.Must(zap.NewProduction()).Sugar()

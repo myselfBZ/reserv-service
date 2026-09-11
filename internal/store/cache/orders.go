@@ -40,9 +40,12 @@ func (s *OrdersStore) GetById(ctx context.Context, id string) (*store.Order, err
 	return &o, nil
 }
 
-func (s *OrdersStore) Delete(ctx context.Context, id string) error {
-	key := fmt.Sprintf(orderPrefix, id)
-	_, err := s.client.Del(ctx, key).Result()
+func (s *OrdersStore) Delete(ctx context.Context, ids ...string) error {
+	keys := []string{}
+	for _, id := range ids {
+		keys = append(keys, fmt.Sprintf(orderPrefix, id))
+	}
+	_, err := s.client.Del(ctx, keys...).Result()
 	return err
 }
 

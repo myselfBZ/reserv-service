@@ -24,6 +24,8 @@ type api struct {
 	cache  *cache.Cache
 	store  *store.Storage
 	logger *zap.SugaredLogger
+
+	stop   chan struct{}
 }
 
 func (a *api) mount() http.Handler {
@@ -77,6 +79,9 @@ func (a *api) run(mux http.Handler) error {
 		shutdown <- srv.Shutdown(ctx)
 	}()
 
+	// Background jobs
+	go a.cancelStaleOrdersJanitor()
+
 	a.logger.Infow("server has started", "addr", a.cfg.addr, "env", a.cfg.env)
 
 	err := srv.ListenAndServe()
@@ -88,6 +93,8 @@ func (a *api) run(mux http.Handler) error {
 	if err != nil {
 		return err
 	}
+	
+	a.stop <- struct{}{}
 
 	a.logger.Infow("server has stopped", "addr", a.cfg.addr, "env", a.cfg.env)
 

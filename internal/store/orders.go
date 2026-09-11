@@ -9,6 +9,8 @@ import (
 	"github.com/lib/pq"
 )
 
+const CancelPendingInterval = time.Minute * 15
+
 var (
 	ErrOrderCannotBeCancelled  = errors.New("order can't be cancelled")
 	ErrInvalidProductId        = errors.New("invalid product id: product does not exist")
@@ -341,4 +343,110 @@ func (s *OrderStore) Cancel(ctx context.Context, orderId string) error {
 		return ErrOrderCannotBeCancelled
 	}
 	return tx.Commit()
+}
+
+func (s *OrderStore) CancelStale(ctx context.Context) ([]string, error) {
+	q := `SELECT 
+				o.id,
+				o.user_id,
+				o.status,
+				o.total_price,
+				o.placed_at,
+				it.product_id,
+				it.quantity
+		FROM orders o 
+		JOIN order_items it ON o.id = it.order_id 
+		WHERE o.id IN (
+			SELECT id FROM orders 
+			WHERE status = 'pending' AND placed_at < NOW() - $1::interval
+			ORDER BY placed_at ASC
+			LIMIT $2 
+			FOR UPDATE SKIP LOCKED
+	)`
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer cancel()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := tx.QueryContext(ctx, q, CancelPendingInterval.String(), 50)
+	if err != nil {
+		return nil, err
+	}
+	var orderedIDs []string
+	orderMap := make(map[string]*Order)
+	for rows.Next() {
+		var o Order
+		var(
+			productId string
+			quantity int
+		)
+		err := rows.Scan(
+			&o.Id,
+			&o.UserId,
+			&o.Status,
+			&o.TotalPrice,
+			&o.PlacedAt,
+			&productId,
+			&quantity,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		ord, exists := orderMap[o.Id]
+		if !exists {
+			ord = &o
+			orderMap[o.Id] = ord
+			orderedIDs = append(orderedIDs, o.Id)
+		}
+
+		ord.OrderItems = append(ord.OrderItems, OrderItem{
+			ProductId: productId,
+			Quantity: quantity,
+		})
+	}
+
+	if len(orderedIDs) == 0 {
+		return orderedIDs, nil
+	}
+
+	for _, v := range orderMap {
+
+		for _, it := range v.OrderItems {
+			_, err = tx.ExecContext(
+				ctx, 
+				`UPDATE products SET stock_quantity = stock_quantity + $1 WHERE id = $2`, 
+				it.Quantity, 
+				it.ProductId,
+			)
+
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		res, err := tx.ExecContext(
+			ctx, 
+			`UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status NOT IN ('cancelled', 'confirmed')`, 
+			v.Id,
+		)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return nil, err
+		}
+		if rows == 0 {
+			return nil, ErrOrderCannotBeCancelled
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return orderedIDs, nil
 }
