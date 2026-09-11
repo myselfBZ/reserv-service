@@ -38,10 +38,11 @@ func (a *api) mount() http.Handler {
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Route("/v1", func(r chi.Router) {
-		r.Post("/products", nil)
+		r.Post("/products", a.createProductHandler)
+
 		r.Post("/orders", a.placeOrderHandler)
-		r.Get("/orders/{id}", nil)
-		r.Post("/orders/{id}/cancel", nil)
+		r.Get("/orders/{id}", a.getOrderById)
+		r.Post("/orders/{id}/cancel", a.cancelOrderHandler)
 	})
 
 	return r

@@ -105,7 +105,9 @@ func (s *OrderStore) GetByIdempotencyKey(ctx context.Context, userId, key string
 }
 
 func (s *OrderStore) GetById(ctx context.Context, id string) (*Order, error) {
-	q := `SELECT id, user_id, total_price, status, placed_at FROM orders WHERE id = $1`
+	q := `SELECT 
+			id, user_id, total_price, status, idempotency_key ,placed_at 
+		FROM orders WHERE id = $1`
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 
@@ -115,6 +117,7 @@ func (s *OrderStore) GetById(ctx context.Context, id string) (*Order, error) {
 		&o.UserId,
 		&o.TotalPrice,
 		&o.Status,
+		&o.IdempotencyKey,
 		&o.PlacedAt,
 	)
 	if err != nil {
@@ -125,6 +128,32 @@ func (s *OrderStore) GetById(ctx context.Context, id string) (*Order, error) {
 			return nil, err
 		}
 	}
+
+	items := []OrderItem{}
+	r, err := s.db.QueryContext(ctx, `SELECT * FROM order_items WHERE order_id = $1`, o.Id)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+			return nil, ErrResourceNotFound
+		}
+		return nil, err
+	}
+	for r.Next() {
+		var it OrderItem
+		err := r.Scan(
+			&it.OrderId,
+			&it.ProductId,
+			&it.Quantity,
+			&it.UnitPrice,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, it)
+	}
+	o.OrderItems = items
 	return &o, nil
 }
 
