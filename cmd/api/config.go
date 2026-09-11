@@ -1,5 +1,11 @@
 package main
 
+type redisConfig struct {
+	addr string
+	pw   string
+	db   int
+}
+
 type dbCfg struct {
 	addr         string
 	maxOpenConns int
@@ -14,8 +20,9 @@ type authCfg struct {
 }
 
 type config struct {
-	env  string
-	addr string
-	db   dbCfg
-	auth authCfg
+	env      string
+	addr     string
+	db       dbCfg
+	auth     authCfg
+	cacheCfg redisConfig
 }

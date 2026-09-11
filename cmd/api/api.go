@@ -14,11 +14,14 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/myselfBZ/reserv-service/internal/env"
 	"github.com/myselfBZ/reserv-service/internal/store"
+	"github.com/myselfBZ/reserv-service/internal/store/cache"
 	"go.uber.org/zap"
 )
 
 type api struct {
 	cfg    config
+
+	cache  *cache.Cache
 	store  *store.Storage
 	logger *zap.SugaredLogger
 }
@@ -26,7 +29,8 @@ type api struct {
 func (a *api) mount() http.Handler {
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{env.GetString("CORS_ALLOWED_ORIGIN", "http://localhost:5174")},
+		// Sus...
+		AllowedOrigins:   []string{env.MustGetString("CORS_ALLOWED_ORIGIN")},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -41,7 +45,7 @@ func (a *api) mount() http.Handler {
 		r.Post("/products", a.createProductHandler)
 
 		r.Post("/orders", a.placeOrderHandler)
-		r.Get("/orders/{id}", a.getOrderById)
+		r.Get("/orders/{id}", a.getOrderByIdHandler)
 		r.Post("/orders/{id}/cancel", a.cancelOrderHandler)
 	})
 

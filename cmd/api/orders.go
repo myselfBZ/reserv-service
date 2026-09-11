@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/myselfBZ/reserv-service/internal/store"
+	"github.com/myselfBZ/reserv-service/internal/store/cache"
 )
 
 type placeOrderPayload struct {
@@ -38,6 +41,8 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userId := "33745878-a505-4785-8318-f2c86b61d1bc"
+
+	// TODO TODO TODO TODO
 	// userId, err := getUserId(r)
 	// if err != nil {
 	// 	writeJSONError(w, http.StatusUnauthorized, "invalid user id")
@@ -108,14 +113,21 @@ func (a *api) cancelOrderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 3)
+		defer cancel()
+		if err := a.cache.Orders.Delete(ctx, orderId); err != nil {
+			a.logger.Errorw("order cahce del failed", "err", err)
+		}
+	}()
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"message":"success",
 		"order_id":orderId,
 	})
 }
 
-
-func (a *api) getOrderById(w http.ResponseWriter, r *http.Request) {
+func (a *api) getOrderByIdHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	validId, err := uuid.Parse(id)
 	if err != nil {
@@ -123,20 +135,39 @@ func (a *api) getOrderById(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnprocessableEntity, "invalid order id")
 		return
 	}
-	 o, err := a.store.Orders.GetById(r.Context(), validId.String()) 
 
-	 if err != nil {
-		 switch err {
-		 case store.ErrResourceNotFound:
-			 a.logger.Warnw("order not found for fetching", "err", err)
-			 writeJSONError(w, http.StatusNotFound, "order not found")
-		 default:
-			 a.logger.Errorw("internal server error order not fetched", "err", err)
-			 writeJSONError(w, http.StatusInternalServerError, "internal server error")
-		 }
-		 return
-	 }
+	o, err := a.cache.Orders.GetById(r.Context(), validId.String())
 
-	 writeJSON(w, http.StatusOK, o)
+	if err == nil {
+		writeJSON(w, http.StatusOK, o)
+		return
+	} else if err != cache.ErrNotFound {
+		a.logger.Errorw("order cache error", "err", err)
+	}
+
+	a.logger.Infow("cache miss", "order_id", id)
+
+	o, err = a.store.Orders.GetById(r.Context(), validId.String()) 
+
+	if err != nil {
+		switch err {
+		case store.ErrResourceNotFound:
+			a.logger.Warnw("order not found for fetching", "err", err)
+			writeJSONError(w, http.StatusNotFound, "order not found")
+		default:
+			a.logger.Errorw("internal server error order not fetched", "err", err)
+			writeJSONError(w, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 3)
+		defer cancel()
+		if err := a.cache.Orders.Set(ctx, o); err != nil {
+			a.logger.Errorw("order cahce set failed", "err", err)
+		}
+	}()
+
+	writeJSON(w, http.StatusOK, o)
 }
-

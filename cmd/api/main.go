@@ -5,6 +5,7 @@ import (
 	"github.com/myselfBZ/reserv-service/internal/db"
 	"github.com/myselfBZ/reserv-service/internal/env"
 	"github.com/myselfBZ/reserv-service/internal/store"
+	"github.com/myselfBZ/reserv-service/internal/store/cache"
 	"go.uber.org/zap"
 )
 
@@ -23,6 +24,11 @@ func main() {
 				secret: env.MustGetString("AUTH_SECRET"),
 				iss:    env.MustGetString("AUTH_ISS"),
 				aud:    env.MustGetString("AUTH_AUD"),
+			},
+			cacheCfg: redisConfig{
+				addr:    env.GetString("REDIS_ADDR", "localhost:6379"),
+				pw:      env.GetString("REDIS_PW", ""),
+				db:      env.GetInt("REDIS_DB", 0),
 			},
 		},
 	}
@@ -43,6 +49,14 @@ func main() {
 	}
 	s := store.NewStorage(db)
 	a.store = s
+
+	rdClient := cache.NewRedisClient(
+		a.cfg.cacheCfg.addr, 
+		a.cfg.cacheCfg.pw, 
+		a.cfg.cacheCfg.db,
+	)
+	a.cache = cache.New(rdClient)
+
 	mux := a.mount()
 	logger.Fatal(a.run(mux))
 }
