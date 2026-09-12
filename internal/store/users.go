@@ -12,7 +12,6 @@ import (
 
 
 var (
-	ErrUserNotFound   = errors.New("user not found")
 	ErrDuplicateEmail = errors.New("a user with that email already exists")
 )
 
@@ -54,18 +53,31 @@ func (p *password) Compare(text string) error {
 
 func (s *UserStore) GetById(ctx context.Context, id string) (*User, error) {
 	q := `SELECT 
-			u.*, 
-			r.* 
-		FROM users u JOIN roles r ON u.role_id = r.id WHERE id = $1`
+		u.id,
+		u.first_name,
+		u.last_name,
+		u.email,
+		u.password,
+		u.role_id,
+		u.created_at,
+		u.updated_at,
+		r.id,
+		r.name,
+		r.level,
+		r.description
+		FROM users u
+	JOIN roles r ON u.role_id = r.id
+	WHERE u.id = $1`
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 	var user User
+	var lastName sql.NullString
 	err := s.db.QueryRowContext(ctx, q, id).Scan(
 		&user.Id,
 		&user.FirstName,
-		&user.LastName,
+		&lastName,
 		&user.Email,
-		&user.Password,
+		&user.Password.hash,
 		&user.RoleId,
 		&user.CreateAt,
 		&user.UpdatedAt,
@@ -77,18 +89,27 @@ func (s *UserStore) GetById(ctx context.Context, id string) (*User, error) {
 	if err != nil {
 		switch err {
 		case sql.ErrNoRows:
-			return nil, ErrUserNotFound
+			return nil, ErrResourceNotFound
 		default:
 			return nil, err
 		}
+	}
+	if lastName.Valid {
+		user.LastName = lastName.String
 	}
 	return &user, nil
 }
 
 func (s *UserStore) Create(ctx context.Context, u *User) error {
-	q := `INSER INTO users(
+	q := `INSERT INTO users(
 		first_name, last_name, email, role_id, password
-	) VALUES($1, $2, $3, $4, $5) RETURNING *`
+	) VALUES(
+		$1, 
+		$2, 
+		$3, 
+		(SELECT id FROM roles WHERE name = $4), 
+		$5
+	) RETURNING users.id, created_at, updated_at`
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
@@ -98,10 +119,12 @@ func (s *UserStore) Create(ctx context.Context, u *User) error {
 		nullString(u.FirstName),
 		nullString(u.LastName),
 		nullString(u.Email),
-		u.RoleId,
+		u.Role.Name,
 		nullString(string(u.Password.hash)),
 	).Scan(
 		&u.Id,
+		&u.CreateAt,
+		&u.UpdatedAt,
 	)
 	if err != nil {
 		switch {
@@ -115,39 +138,33 @@ func (s *UserStore) Create(ctx context.Context, u *User) error {
 	return nil
 }
 
-
-// CREATE TABLE IF NOT EXISTS roles (
-//   id BIGSERIAL PRIMARY KEY,
-//   name VARCHAR(255) NOT NULL UNIQUE,
-//   level int NOT NULL DEFAULT 0,
-//   description TEXT
-// );
-
-// CREATE TABLE users(
-//     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-//     first_name VARCHAR(255) NOT NULL,
-//     last_name VARCHAR(255),
-//     email VARCHAR(255) NOT NULL,
-//     password VARCHAR(255) NOT NULL,
-//     role_id INT REFERENCES roles(id) DEFAULT 1,
-//     created_at timestamp(0) with time zone NOT NULL DEFAULT NOW(),
-//     updated_at timestamp(0) with time zone NOT NULL DEFAULT NOW()
-// );
-
 func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error) {
 	q := `SELECT 
-			u.*, 
-			r.* 
-		FROM users u JOIN roles r ON u.role_id = r.id WHERE email = $1`
+		u.id,
+		u.first_name,
+		u.last_name,
+		u.email,
+		u.password,
+		u.role_id,
+		u.created_at,
+		u.updated_at,
+		r.id,
+		r.name,
+		r.level,
+		r.description
+		FROM users u
+	JOIN roles r ON u.role_id = r.id
+	WHERE u.email = $1`
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 	var user User
+	var lastName sql.NullString
 	err := s.db.QueryRowContext(ctx, q, email).Scan(
 		&user.Id,
 		&user.FirstName,
-		&user.LastName,
+		&lastName,
 		&user.Email,
-		&user.Password,
+		&user.Password.hash,
 		&user.RoleId,
 		&user.CreateAt,
 		&user.UpdatedAt,
@@ -159,10 +176,13 @@ func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error)
 	if err != nil {
 		switch err {
 		case sql.ErrNoRows:
-			return nil, ErrUserNotFound
+			return nil, ErrResourceNotFound
 		default:
 			return nil, err
 		}
+	}
+	if lastName.Valid {
+		user.LastName = lastName.String
 	}
 	return &user, nil
 }

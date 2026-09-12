@@ -14,6 +14,7 @@ var QueryTimeoutDuration = time.Second * 5
 
 func NewStorage(db *sql.DB) *Storage {
 	return &Storage{
+		Roles: &RoleStore{db: db},
 		Users: &UserStore{db: db},
 		Orders:   &OrderStore{db: db},
 		Products: &ProductStore{db: db},
@@ -21,6 +22,10 @@ func NewStorage(db *sql.DB) *Storage {
 }
 
 type Storage struct {
+	Roles interface {
+		GetByName(context.Context, string) (*Role, error)
+	}
+
 	Users interface {
 		Create(context.Context, *User) error
 		GetById(context.Context, string) (*User, error)

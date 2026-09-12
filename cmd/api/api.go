@@ -33,7 +33,6 @@ type api struct {
 func (a *api) mount() http.Handler {
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
-		// Sus...
 		AllowedOrigins:   []string{env.MustGetString("CORS_ALLOWED_ORIGIN")},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
@@ -46,11 +45,22 @@ func (a *api) mount() http.Handler {
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Route("/v1", func(r chi.Router) {
-		r.Post("/products", a.createProductHandler)
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/register", a.registerUserHandler)
+			r.Post("/login", a.loginHandler)
+		})
 
-		r.Post("/orders", a.placeOrderHandler)
-		r.Get("/orders/{id}", a.getOrderByIdHandler)
-		r.Post("/orders/{id}/cancel", a.cancelOrderHandler)
+		r.Route("/products", func(r chi.Router) {
+			r.Use(a.AuthTokenMiddleware)
+			r.Post("/", a.createProductHandler)
+		})
+
+		r.Route("/orders", func(r chi.Router) {
+			r.Use(a.AuthTokenMiddleware)
+			r.Post("/", a.placeOrderHandler)
+			r.Get("/{id}", a.getOrderByIdHandler)
+			r.Post("/{id}/cancel", a.cancelOrderHandler)
+		})
 	})
 
 	return r

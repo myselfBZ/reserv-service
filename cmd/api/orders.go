@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -45,15 +46,7 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	userId := "33745878-a505-4785-8318-f2c86b61d1bc"
-
-	// TODO TODO TODO TODO
-	// userId, err := getUserId(r)
-	// if err != nil {
-	// 	writeJSONError(w, http.StatusUnauthorized, "invalid user id")
-	// 	a.logger.Warnw("invalid user id", "err", err)
-	// 	return
-	// }
+	user := getUserFromContext(r)
 	items := []store.OrderItem{}
 	for _, it := range p.Items {
 		items = append(items, store.OrderItem{
@@ -62,7 +55,7 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	ordr := &store.Order{
-		UserId:         userId,
+		UserId:         user.Id.String(),
 		IdempotencyKey: idempKey,
 		OrderItems: items,
 	}
@@ -76,7 +69,7 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 			a.logger.Warnw("insuffcient stock amount", "err", err)
 			writeJSONError(w, http.StatusBadRequest, "insuffcient stock amount")
 		case store.ErrDuplicateIdempotencyKey:
-			ordr, err := a.store.Orders.GetByIdempotencyKey(r.Context(), userId, idempKey)
+			ordr, err := a.store.Orders.GetByIdempotencyKey(r.Context(), user.Id.String(), idempKey)
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, "server encountered an error")
 				a.logger.Errorw("order not found by idempotency key", "err", err)
@@ -133,6 +126,11 @@ func (a *api) cancelOrderHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) getOrderByIdHandler(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	isAdmin, err := a.checkRolePrecedence(r.Context(), user, "admin")
+	if err != nil {
+		a.internalServerError(w, r, err)
+	}
 	id := r.PathValue("id")
 	validId, err := uuid.Parse(id)
 	if err != nil {
@@ -141,18 +139,7 @@ func (a *api) getOrderByIdHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o, err := a.cache.Orders.GetById(r.Context(), validId.String())
-
-	if err == nil {
-		writeJSON(w, http.StatusOK, o)
-		return
-	} else if err != cache.ErrNotFound {
-		a.logger.Errorw("order cache error", "err", err)
-	}
-
-	a.logger.Infow("cache miss", "order_id", id)
-
-	o, err = a.store.Orders.GetById(r.Context(), validId.String()) 
+	o, err := a.getOrder(r.Context(), validId.String()) 
 
 	if err != nil {
 		switch err {
@@ -166,13 +153,10 @@ func (a *api) getOrderByIdHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 3)
-		defer cancel()
-		if err := a.cache.Orders.Set(ctx, o); err != nil {
-			a.logger.Errorw("order cahce set failed", "err", err)
-		}
-	}()
+	if o.UserId != user.Id.String() && !isAdmin {
+		a.unauthorizedErrorResponse(w, r, fmt.Errorf("order ownership check failed"))
+		return
+	}
 
 	writeJSON(w, http.StatusOK, o)
 }
@@ -198,4 +182,24 @@ func (a *api) cancelStaleOrdersJanitor() {
 			return
 		}
 	}
+}
+
+func (a *api) getOrder(ctx context.Context, id string) (*store.Order, error) {
+	o, err := a.cache.Orders.GetById(ctx, id)
+
+	if err == nil {
+		return o, nil
+	} else if err != cache.ErrNotFound {
+		a.logger.Errorw("order cache error", "err", err)
+	}
+
+	o, err = a.store.Orders.GetById(ctx, id) 
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 3)
+		defer cancel()
+		if err := a.cache.Orders.Set(ctx, o); err != nil {
+			a.logger.Errorw("order cahce set failed", "err", err)
+		}
+	}()
+	return o, err
 }

@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -15,8 +14,7 @@ import (
 
 const OrderExpTime = time.Minute * 5
 var (
-	orderPrefix = "order-%s"
-	ErrNotFound = errors.New("resource is not present in cache") 
+	orderPrefix = "order:%s"
 )
 
 type OrdersStore struct {

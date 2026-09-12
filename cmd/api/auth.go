@@ -14,38 +14,48 @@ type UserWithToken struct {
 
 type loginPayload struct {
 	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
+	Password string `json:"password" validate:"required,min=8,max=72"`
 }
 
 type registerPayload struct {
 	FirstName string `json:"first_name" validate:"required,min=2,max=50"`
-	LastName  string `json:"last_name" validate:"min=2,max=50"`
+	LastName  string `json:"last_name" validate:"max=50"`
 	Email     string `json:"email" validate:"required,email"`
 	Password  string `json:"password" validate:"required,min=8,max=72"`
 }
 
 func (a *api) registerUserHandler(w http.ResponseWriter, r *http.Request) {
-	var payload registerPayload
-	if err := readJSON(w, r, &payload); err != nil {
+	var p registerPayload
+	if err := readJSON(w, r, &p); err != nil {
 		a.badRequestResponse(w, r, err)
 		return
 	}
 
-	if err := Validate.Struct(payload); err != nil {
+	if err := Validate.Struct(p); err != nil {
 		a.badRequestResponse(w, r, err)
 		return
 	}
 
 	user := &store.User{
-		FirstName: payload.FirstName,
-		Email:     payload.Email,
+		FirstName: p.FirstName,
+		Email:     p.Email,
 		Role: store.Role{
 			Name: "user",
 		},
 	}
 
-	if err := user.Password.Set(payload.Password); err != nil {
+	if err := user.Password.Set(p.Password); err != nil {
 		a.internalServerError(w, r, err)
+		return
+	}
+
+	if err := a.store.Users.Create(r.Context(), user); err != nil {
+		switch err {
+		case store.ErrDuplicateEmail:
+			a.conflictResponse(w, r, err)
+		default:
+			a.internalServerError(w, r, err)
+		}
 		return
 	}
 
@@ -62,11 +72,49 @@ func (a *api) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 		Tokens: pair,
 	}
-	if err := a.jsonResponse(w, http.StatusCreated, userWithToken); err != nil {
-		a.internalServerError(w, r, err)
-	}
+
+	writeJSON(w, http.StatusCreated, userWithToken)
 }
 
 func (a *api) loginHandler(w http.ResponseWriter, r *http.Request) {
+	var p loginPayload
+	if err := readJSON(w, r, &p); err != nil {
+		a.badRequestResponse(w, r, ErrMalformedJsonPayload)
+		return
+	}
 
+	if err := Validate.Struct(p); err != nil {
+		a.logger.Warnw("loginPayload failed on validation", "err", err)
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error":"json validation failed",
+			"details": formatValidationErrors(err),
+		})
+		return
+	}
+
+	user, err := a.store.Users.GetByEmail(r.Context(), p.Email)
+	if err != nil {
+		switch err {
+		case store.ErrResourceNotFound:
+			a.notFoundResponse(w, r, err)
+		default:
+			a.internalServerError(w, r, err)
+		}
+		return
+	}
+
+	if err := user.Password.Compare(p.Password); err != nil {
+		a.unauthorizedErrorResponse(w, r, err)
+		return
+	}
+
+	pair, err := a.auth.GenerateTokenPair(user.Id.String(), make(map[string]any))
+	if err != nil {
+		a.internalServerError(w, r, err)
+	}
+
+	writeJSON(w, http.StatusOK, &UserWithToken{
+		User: user,
+		Tokens: pair,
+	})
 }
