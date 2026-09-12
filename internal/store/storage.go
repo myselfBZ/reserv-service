@@ -9,8 +9,8 @@ import (
 
 var (
 	ErrResourceNotFound = errors.New("resource not found")
+	QueryTimeoutDuration = time.Second * 5
 )
-var QueryTimeoutDuration = time.Second * 5
 
 func NewStorage(db *sql.DB) *Storage {
 	return &Storage{
@@ -18,6 +18,7 @@ func NewStorage(db *sql.DB) *Storage {
 		Users: &UserStore{db: db},
 		Orders:   &OrderStore{db: db},
 		Products: &ProductStore{db: db},
+		Health: &Health{db: db},
 	}
 }
 
@@ -44,5 +45,10 @@ type Storage struct {
 	Products interface {
 		Create(context.Context, *Product) error
 		GetById(context.Context, string) (*Product, error)
+	}
+
+
+	Health interface {
+		Get() (*HealthInfo, error)
 	}
 }

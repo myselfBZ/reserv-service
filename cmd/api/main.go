@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/myselfBZ/reserv-service/internal/auth"
 	"github.com/myselfBZ/reserv-service/internal/db"
@@ -67,5 +69,6 @@ func main() {
 		a.cfg.auth.iss,
 	)
 	mux := a.mount()
+	a.startedAt = time.Now()
 	logger.Fatal(a.run(mux))
 }

@@ -20,14 +20,14 @@ import (
 )
 
 type api struct {
-	cfg    config
+	cfg       config
+	startedAt time.Time
+	cache     *cache.Cache
+	auth      auth.Authenticator
+	store     *store.Storage
+	logger    *zap.SugaredLogger
 
-	cache  *cache.Cache
-	auth   auth.Authenticator
-	store  *store.Storage
-	logger *zap.SugaredLogger
-
-	stop   chan struct{}
+	stop chan struct{}
 }
 
 func (a *api) mount() http.Handler {
@@ -64,6 +64,11 @@ func (a *api) mount() http.Handler {
 				r.Get("/", a.checkOrderOwnership("admin", a.getOrderByIdHandler))
 				r.Post("/cancel", a.checkOrderOwnership("admin", a.cancelOrderHandler))
 			})
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(a.AuthTokenMiddleware)
+			r.Get("/health", a.healthCheckHandler)
 		})
 	})
 
@@ -109,7 +114,7 @@ func (a *api) run(mux http.Handler) error {
 	if err != nil {
 		return err
 	}
-	
+
 	a.stop <- struct{}{}
 
 	a.logger.Infow("server has stopped", "addr", a.cfg.addr, "env", a.cfg.env)
