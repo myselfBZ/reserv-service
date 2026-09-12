@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/myselfBZ/reserv-service/internal/store"
 	"github.com/myselfBZ/reserv-service/internal/store/cache"
@@ -22,6 +23,8 @@ func (a *api) getUser(ctx context.Context, userId string) (*store.User, error) {
 		return nil, err
 	}
 	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 3)
+		defer cancel()
 		if err := a.cache.Users.Set(ctx, u); err != nil {
 			a.logger.Errorf("caching user failed", "err", err)
 		}
