@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/myselfBZ/reserv-service/internal/store"
@@ -13,6 +14,18 @@ type createProductPayload struct {
 }
 
 func (a *api) createProductHandler(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	isAdmin, err := a.checkRolePrecedence(r.Context(), user, "admin")
+	if err != nil {
+		a.internalServerError(w, r, err)
+		return
+	}
+
+	if !isAdmin {
+		a.unauthorizedErrorResponse(w, r, errors.New("unauthorized attempt to product creation"))
+		return
+	}
+
 	var p createProductPayload
 	if err := readJSON(w, r, &p); err != nil {
 		a.logger.Warnw("malformed json payload", "err", err)
