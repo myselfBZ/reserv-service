@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/myselfBZ/reserv-service/internal/store"
 	"github.com/myselfBZ/reserv-service/internal/store/cache"
 )
@@ -88,15 +86,8 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 
 
 func (a *api) cancelOrderHandler(w http.ResponseWriter, r *http.Request) {
-	orderId := r.PathValue("id")
-	validId, err := uuid.Parse(orderId)
-	if err != nil {
-		a.logger.Warnw("invalid uuid", "id", orderId)
-		writeJSONError(w, http.StatusUnprocessableEntity, "invalid order id")
-		return
-	}
-
-	if err := a.store.Orders.Cancel(r.Context(), validId.String()); err != nil {
+	o := getOrderFromCtx(r)
+	if err := a.store.Orders.Cancel(r.Context(), o.Id); err != nil {
 		switch err {
 		case store.ErrResourceNotFound:
 			a.logger.Warnw("order not found for cancellation", "err", err)
@@ -114,50 +105,19 @@ func (a *api) cancelOrderHandler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 3)
 		defer cancel()
-		if err := a.cache.Orders.Delete(ctx, orderId); err != nil {
+		if err := a.cache.Orders.Delete(ctx, o.Id); err != nil {
 			a.logger.Errorw("order cahce del failed", "err", err)
 		}
 	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"message":"success",
-		"order_id":orderId,
+		"order_id":o.Id,
 	})
 }
 
 func (a *api) getOrderByIdHandler(w http.ResponseWriter, r *http.Request) {
-	user := getUserFromContext(r)
-	isAdmin, err := a.checkRolePrecedence(r.Context(), user, "admin")
-	if err != nil {
-		a.internalServerError(w, r, err)
-	}
-	id := r.PathValue("id")
-	validId, err := uuid.Parse(id)
-	if err != nil {
-		a.logger.Warnw("invalid order uuid", "err", err)
-		writeJSONError(w, http.StatusUnprocessableEntity, "invalid order id")
-		return
-	}
-
-	o, err := a.getOrder(r.Context(), validId.String()) 
-
-	if err != nil {
-		switch err {
-		case store.ErrResourceNotFound:
-			a.logger.Warnw("order not found for fetching", "err", err)
-			writeJSONError(w, http.StatusNotFound, "order not found")
-		default:
-			a.logger.Errorw("internal server error order not fetched", "err", err)
-			writeJSONError(w, http.StatusInternalServerError, "internal server error")
-		}
-		return
-	}
-
-	if o.UserId != user.Id.String() && !isAdmin {
-		a.unauthorizedErrorResponse(w, r, fmt.Errorf("order ownership check failed"))
-		return
-	}
-
+	o := getOrderFromCtx(r)
 	writeJSON(w, http.StatusOK, o)
 }
 
@@ -182,6 +142,11 @@ func (a *api) cancelStaleOrdersJanitor() {
 			return
 		}
 	}
+}
+
+func getOrderFromCtx(r *http.Request) *store.Order {
+	o, _ := r.Context().Value(orderCtx).(*store.Order)
+	return o
 }
 
 func (a *api) getOrder(ctx context.Context, id string) (*store.Order, error) {

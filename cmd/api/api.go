@@ -58,8 +58,12 @@ func (a *api) mount() http.Handler {
 		r.Route("/orders", func(r chi.Router) {
 			r.Use(a.AuthTokenMiddleware)
 			r.Post("/", a.placeOrderHandler)
-			r.Get("/{id}", a.getOrderByIdHandler)
-			r.Post("/{id}/cancel", a.cancelOrderHandler)
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.Use(a.ordersContextMiddleware)
+				r.Get("/", a.checkOrderOwnership("admin", a.getOrderByIdHandler))
+				r.Post("/cancel", a.checkOrderOwnership("admin", a.cancelOrderHandler))
+			})
 		})
 	})
 
