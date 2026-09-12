@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/myselfBZ/reserv-service/internal/auth"
@@ -118,3 +119,46 @@ func (a *api) loginHandler(w http.ResponseWriter, r *http.Request) {
 		Tokens: pair,
 	})
 }
+
+func (a *api) refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("X-Refresh-Token")
+	if token == "" {
+		a.unauthorizedErrorResponse(w, r, fmt.Errorf("refresh token missing"))
+		return
+	}
+	tok, err := a.auth.ValidateRefreshToken(token)
+	if err != nil {
+		a.unauthorizedErrorResponse(w, r, fmt.Errorf("invalid token"))
+		return
+	}
+	userId, err := a.auth.ExtractUserID(tok)
+	if err != nil {
+		a.unauthorizedErrorResponse(w, r, fmt.Errorf("invalid token claims"))
+		return
+	}
+	user, err := a.getUser(r.Context(), userId)
+	if err != nil {
+		switch err {
+		case store.ErrResourceNotFound:
+			a.logger.Warnw("user not found", "err", err)
+			writeJSONError(w, http.StatusNotFound, "user not found")
+		default:
+			a.internalServerError(w, r, err)
+		}
+		return
+	}
+
+	tokens, err := a.auth.GenerateTokenPair(user.Id.String(), make(map[string]any))
+	if err != nil {
+		a.internalServerError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, UserWithToken{
+		User: user,
+		Tokens: tokens,
+	})
+}
+
+
+

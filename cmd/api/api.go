@@ -48,6 +48,7 @@ func (a *api) mount() http.Handler {
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", a.registerUserHandler)
 			r.Post("/login", a.loginHandler)
+			r.Post("/refresh", a.refreshTokenHandler)
 		})
 
 		r.Route("/products", func(r chi.Router) {
