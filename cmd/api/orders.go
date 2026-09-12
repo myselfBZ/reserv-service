@@ -67,7 +67,7 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusNotFound, "product is not found")
 		case store.ErrInsufficientStock:
 			a.logger.Warnw("insuffcient stock amount", "err", err)
-			writeJSONError(w, http.StatusBadRequest, "insuffcient stock amount")
+			writeJSONError(w, http.StatusConflict, "insuffcient stock amount")
 		case store.ErrDuplicateIdempotencyKey:
 			ordr, err := a.store.Orders.GetByIdempotencyKey(r.Context(), user.Id.String(), idempKey)
 			if err != nil {
