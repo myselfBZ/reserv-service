@@ -51,6 +51,7 @@ func (a *api) createProductHandler(w http.ResponseWriter, r *http.Request) {
 	if err := a.store.Products.Create(r.Context(), product); err != nil {
 		a.logger.Errorw("could not create a product", "err", err)
 		writeJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
 	}
 
 	writeJSON(w, http.StatusCreated, product)

@@ -159,6 +159,9 @@ func (a *api) getOrder(ctx context.Context, id string) (*store.Order, error) {
 	}
 
 	o, err = a.store.Orders.GetById(ctx, id) 
+	if err != nil {
+		return nil, err
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 3)
 		defer cancel()
