@@ -33,7 +33,7 @@ func main() {
 				aud:           env.GetString("AUTH_AUD", "users"),
 			},
 			cacheCfg: redisConfig{
-				addr: env.GetString("REDIS_ADDR", "localhost:6379"),
+				addr: env.GetString("REDIS_ADDR", "cache:6379"),
 				pw:   env.GetString("REDIS_PW", ""),
 				db:   env.GetInt("REDIS_DB", 0),
 			},
