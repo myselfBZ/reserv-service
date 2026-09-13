@@ -212,7 +212,7 @@ func (s *OrderStore) Create(ctx context.Context, o *Order) (err error) {
 
 	if err != nil {
 		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && pqErr.Code == "23505" && pqErr.Constraint == "orders_idempotency_key_key" {
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" && pqErr.Constraint == "uq_orders_user_idempotency" {
 			return ErrDuplicateIdempotencyKey
 		}
 		return err
