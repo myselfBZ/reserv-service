@@ -72,14 +72,14 @@ func (a *api) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh-token",
 		Value:    pair.RefreshToken,
-		Domain:   fmt.Sprintf("localhost:%s", a.cfg.addr),
+		Path:     "/v1/auth/refresh",
 		HttpOnly: true,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		SameSite: http.SameSiteLaxMode,
 	})
 
 	userWithToken := UserWithToken{
-		User:   user,
+		User:  user,
 		Token: pair.AccessToken,
 	}
 
@@ -126,14 +126,14 @@ func (a *api) loginHandler(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh-token",
 		Value:    pair.RefreshToken,
-		Domain:   fmt.Sprintf("localhost:%s", a.cfg.addr),
+		Path:     "/v1/auth/refresh",
 		HttpOnly: true,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		SameSite: http.SameSiteLaxMode,
 	})
 
 	userWithToken := UserWithToken{
-		User:   user,
+		User:  user,
 		Token: pair.AccessToken,
 	}
 
@@ -149,8 +149,8 @@ func (a *api) refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	tok, err := a.auth.ValidateRefreshToken(c.Value)
 	if err != nil {
 		http.SetCookie(w, &http.Cookie{
-			Name: "refresh-token",
-			Value: "",
+			Name:   "refresh-token",
+			Value:  "",
 			MaxAge: -1,
 		})
 		a.unauthorizedErrorResponse(w, r, fmt.Errorf("invalid token"))
@@ -182,14 +182,14 @@ func (a *api) refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh-token",
 		Value:    pair.RefreshToken,
-		Domain:   fmt.Sprintf("localhost:%s", a.cfg.addr),
+		Path:     "/v1/auth/refresh",
 		HttpOnly: true,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		SameSite: http.SameSiteLaxMode,
 	})
 
 	userWithToken := UserWithToken{
-		User:   user,
+		User:  user,
 		Token: pair.AccessToken,
 	}
 
