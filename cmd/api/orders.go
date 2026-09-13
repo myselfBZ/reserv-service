@@ -88,9 +88,9 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, "server encountered an error")
 				a.logger.Errorw("order not found by idempotency key", "err", err)
+				return
 			}
 			writeJSON(w, http.StatusCreated, ordr)
-			return
 		default:
 			a.logger.Errorw("internal server error", "err", err)
 			writeJSONError(w, http.StatusInternalServerError, "internal server error")
