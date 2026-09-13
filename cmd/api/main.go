@@ -18,14 +18,17 @@ func main() {
 			env:  env.GetString("ENV", "development"),
 			addr: env.GetString("ADDR", ":8080"),
 			db: dbCfg{
-				addr:         env.MustGetString("DB"),
+				addr:         env.GetString(
+					"DB", 
+					"postgresql://admin:adminpassword@db:5432/reserv_service?sslmode=disable",
+				),
 				maxOpenConns: env.GetInt("MAX_OPEN_CONNS", 30),
 				maxIdleConns: env.GetInt("MAX_IDLE_CONNS", 30),
 				maxIdleTime:  env.GetString("MAX_IDLE_TIME", "15m"),
 			},
 			auth: authCfg{
-				refreshSecret: env.MustGetString("AUTH_REFRESH_SECRET"),
-				secret:        env.MustGetString("AUTH_SECRET"),
+				refreshSecret: env.GetString("AUTH_REFRESH_SECRET", "ChangeMeOnProd"),
+				secret:        env.GetString("AUTH_SECRET", "ChangeMeOnProd2"),
 				iss:           env.GetString("AUTH_ISS", "reserv-service"),
 				aud:           env.GetString("AUTH_AUD", "users"),
 			},
