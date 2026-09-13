@@ -14,6 +14,19 @@ type healthCheckResponse struct {
 	DB         *store.HealthInfo `json:"db"`
 }
 
+// HealthCheck godoc
+//
+//	@Summary		Health check
+//	@Description	Reports service uptime and database health. Admin-only.
+//	@Tags			health
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	healthCheckResponse
+//	@Success		503	{object}	healthCheckResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		ApiKeyAuth
+//	@Router			/health [get]
 func (a *api) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	allowed, err := a.checkRolePrecedence(r.Context(), user, "admin")
