@@ -238,7 +238,7 @@ func (s *OrderStore) Create(ctx context.Context, o *Order) (err error) {
 }
 
 func (s *OrderStore) Confirm(ctx context.Context, orderId string) error {
-	q := `UPDATE order SET status = 'confirmed' WHERE id = $1 AND status NOT IN ('cancelled', 'confirmed')`
+	q := `UPDATE orders SET status = 'confirmed' WHERE id = $1 AND status NOT IN ('cancelled', 'confirmed')`
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 	r, err := s.db.ExecContext(ctx, q, orderId)

@@ -80,6 +80,7 @@ func (a *api) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		a.internalServerError(w, r, err)
+		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
