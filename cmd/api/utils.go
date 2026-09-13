@@ -8,6 +8,11 @@ import (
 	"github.com/google/uuid"
 )
 
+type ValidationError struct {
+	Message string       `json:"message"`
+	Details []fieldError `json:"details"`
+}
+
 type fieldError struct {
 	Field string `json:"field"`
 	Msg   string `json:"message"`
@@ -40,8 +45,8 @@ func formatValidationErrors(err error) []fieldError {
 		}
 
 		errors = append(errors, fieldError{
-			Field:   err.Field(),
-			Msg: message,
+			Field: err.Field(),
+			Msg:   message,
 		})
 	}
 

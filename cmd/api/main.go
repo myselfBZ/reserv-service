@@ -12,6 +12,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// @title			Reserv Service API
+// @version		1.0
+// @description	Concurrent order & inventory reservation service
+// @host			localhost:8080
+// @BasePath		/v1
+//
+// @securityDefinitions.apikey	ApiKeyAuth
+// @in							header
+// @name						Authorization
+// @description				Type "Bearer" followed by a space and the JWT access token.
 func main() {
 	a := &api{
 		cfg: config{

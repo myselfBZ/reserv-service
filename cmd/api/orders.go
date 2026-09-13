@@ -23,6 +23,23 @@ type itemPayload struct {
 	Quantity  int `json:"quantity" validate:"required,gt=0"`
 }
 
+// PlaceOrder godoc
+//
+//	@Summary		Places a new order
+//	@Description	Creates an order for one or more items and reserves stock. Requires an Idempotency-Key header;
+//	@Tags			orders
+//	@Accept			json
+//	@Produce		json
+//	@Param			Idempotency-Key	header		string				true	"Unique key to make the request idempotent"
+//	@Param			order			body		placeOrderPayload	true	"Order items"
+//	@Success		201				{object}	store.Order
+//	@Failure		400				{object}	ErrorResponse
+//	@Failure		404				{object}	ErrorResponse
+//	@Failure		409				{object}	ErrorResponse
+//	@Failure		422				{object}	ValidationError
+//	@Failure		500				{object}	ErrorResponse
+//	@Security		ApiKeyAuth
+//	@Router			/orders/ [post]
 func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 	idempKey := r.Header.Get("Idempotency-Key")
 	if idempKey == "" {
@@ -38,9 +55,9 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := Validate.Struct(&p); err != nil {
 		a.logger.Warnw("payload failed the validation", "err", err)
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"error":"json validation failed",
-			"details": formatValidationErrors(err),
+		writeJSON(w, http.StatusUnprocessableEntity, &ValidationError{
+			Message: "validation failed",
+			Details: formatValidationErrors(err),
 		})
 		return
 	}
@@ -84,7 +101,20 @@ func (a *api) placeOrderHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, ordr)
 }
 
-
+// CancelOrder godoc
+//
+//	@Summary		Cancels an order
+//	@Description	Cancels a pending order and releases its reserved stock back into inventory.
+//	@Tags			orders
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Order ID"
+//	@Success		200	{object}	map[string]any
+//	@Failure		400	{object}	ErrorResponse
+//	@Failure		404	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		ApiKeyAuth
+//	@Router			/orders/{id}/cancel [post]
 func (a *api) cancelOrderHandler(w http.ResponseWriter, r *http.Request) {
 	o := getOrderFromCtx(r)
 	if err := a.store.Orders.Cancel(r.Context(), o.Id); err != nil {
@@ -116,6 +146,20 @@ func (a *api) cancelOrderHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetOrderById godoc
+//
+//	@Summary		Fetches an order
+//	@Description	Fetches an order by ID, including its status (pending, confirmed, or cancelled) and line items
+//	@Tags			orders
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		string	true	"Order ID"
+//	@Success		200	{object}	store.Order
+//	@Failure		404	{object}	ErrorResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Failure		500	{object}	ErrorResponse
+//	@Security		ApiKeyAuth
+//	@Router			/orders/{id}/ [get]
 func (a *api) getOrderByIdHandler(w http.ResponseWriter, r *http.Request) {
 	o := getOrderFromCtx(r)
 	writeJSON(w, http.StatusOK, o)

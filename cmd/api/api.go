@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/myselfBZ/reserv-service/docs"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -71,6 +73,8 @@ func (a *api) mount() http.Handler {
 			r.Use(a.AuthTokenMiddleware)
 			r.Get("/health", a.healthCheckHandler)
 		})
+
+		r.Get("/swagger/*", httpSwagger.WrapHandler)
 	})
 
 	return r

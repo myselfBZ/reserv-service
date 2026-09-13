@@ -1,0 +1,416 @@
+basePath: /v1
+definitions:
+  cmd_api.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  cmd_api.UserWithToken:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      role:
+        $ref: '#/definitions/github_com_myselfBZ_reserv-service_internal_store.Role'
+      role_id:
+        type: integer
+      token:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  cmd_api.ValidationError:
+    properties:
+      details:
+        items:
+          $ref: '#/definitions/cmd_api.fieldError'
+        type: array
+      message:
+        type: string
+    type: object
+  cmd_api.createProductPayload:
+    properties:
+      name:
+        maxLength: 255
+        type: string
+      price:
+        type: number
+      stock_quantity:
+        minimum: 0
+        type: integer
+    required:
+    - name
+    - price
+    - stock_quantity
+    type: object
+  cmd_api.fieldError:
+    properties:
+      field:
+        type: string
+      message:
+        type: string
+    type: object
+  cmd_api.itemPayload:
+    properties:
+      product_id:
+        type: string
+      quantity:
+        type: integer
+    required:
+    - product_id
+    - quantity
+    type: object
+  cmd_api.loginPayload:
+    properties:
+      email:
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  cmd_api.placeOrderPayload:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/cmd_api.itemPayload'
+        minItems: 1
+        type: array
+    required:
+    - items
+    type: object
+  cmd_api.registerPayload:
+    properties:
+      email:
+        type: string
+      first_name:
+        maxLength: 50
+        minLength: 2
+        type: string
+      last_name:
+        maxLength: 50
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    required:
+    - email
+    - first_name
+    - password
+    type: object
+  github_com_myselfBZ_reserv-service_internal_store.Order:
+    properties:
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      order_items:
+        items:
+          $ref: '#/definitions/github_com_myselfBZ_reserv-service_internal_store.OrderItem'
+        type: array
+      placed_at:
+        type: string
+      status:
+        type: string
+      total_price:
+        type: number
+      user_id:
+        type: string
+    type: object
+  github_com_myselfBZ_reserv-service_internal_store.OrderItem:
+    properties:
+      order_id:
+        type: string
+      product_id:
+        type: string
+      quantity:
+        type: integer
+      unit_price:
+        type: number
+    type: object
+  github_com_myselfBZ_reserv-service_internal_store.Product:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+      stock_quantity:
+        type: integer
+    type: object
+  github_com_myselfBZ_reserv-service_internal_store.Role:
+    properties:
+      description:
+        type: string
+      id:
+        type: integer
+      level:
+        type: integer
+      name:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Concurrent order & inventory reservation service
+  title: Reserv Service API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user by email and password, issues an access token
+        in the response body, and sets a refresh token as an HttpOnly cookie scoped
+        to /v1/auth/refresh
+      parameters:
+      - description: Login credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api.loginPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api.UserWithToken'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+      summary: Logs in a user
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account with the default "user" role, issues
+        an access token in the response body, and sets a refresh token as an HttpOnly
+        cookie scoped to /v1/auth/refresh
+      parameters:
+      - description: Registration details
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api.registerPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/cmd_api.UserWithToken'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+      summary: Registers a new user
+      tags:
+      - auth
+  /orders/:
+    post:
+      consumes:
+      - application/json
+      description: Creates an order for one or more items and reserves stock. Requires
+        an Idempotency-Key header;
+      parameters:
+      - description: Unique key to make the request idempotent
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Order items
+        in: body
+        name: order
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api.placeOrderPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_myselfBZ_reserv-service_internal_store.Order'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/cmd_api.ValidationError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Places a new order
+      tags:
+      - orders
+  /orders/{id}/:
+    get:
+      consumes:
+      - application/json
+      description: Fetches an order by ID, including its status (pending, confirmed,
+        or cancelled) and line items
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_myselfBZ_reserv-service_internal_store.Order'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Fetches an order
+      tags:
+      - orders
+  /orders/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancels a pending order and releases its reserved stock back into
+        inventory.
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cancels an order
+      tags:
+      - orders
+  /products/:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new product in the inventory. Admin-only.
+      parameters:
+      - description: Product details
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api.createProductPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_myselfBZ_reserv-service_internal_store.Product'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/cmd_api.ValidationError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Creates a product
+      tags:
+      - products
+securityDefinitions:
+  ApiKeyAuth:
+    description: Type "Bearer" followed by a space and the JWT access token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

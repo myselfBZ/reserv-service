@@ -13,6 +13,21 @@ type createProductPayload struct {
 	StockQuantity int     `json:"stock_quantity" validate:"required,gte=0"`
 }
 
+// CreateProduct godoc
+//
+//	@Summary		Creates a product
+//	@Description	Creates a new product in the inventory. Admin-only.
+//	@Tags			products
+//	@Accept			json
+//	@Produce		json
+//	@Param			product	body		createProductPayload	true	"Product details"
+//	@Success		201		{object}	store.Product
+//	@Failure		400		{object}	ErrorResponse
+//	@Failure		401		{object}	ErrorResponse
+//	@Failure		422		{object}	ValidationError	
+//	@Failure		500		{object}	ErrorResponse
+//	@Security		ApiKeyAuth
+//	@Router			/products/ [post]
 func (a *api) createProductHandler(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	isAdmin, err := a.checkRolePrecedence(r.Context(), user, "admin")
@@ -35,9 +50,9 @@ func (a *api) createProductHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := Validate.Struct(&p); err != nil {
 		a.logger.Warnw("payload failed the validation", "err", err)
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"error":"json validation failed",
-			"details": formatValidationErrors(err),
+		writeJSON(w, http.StatusUnprocessableEntity, &ValidationError{
+			Message: "validation failed",
+			Details: formatValidationErrors(err),
 		})
 		return
 	}
