@@ -57,6 +57,15 @@ definitions:
       message:
         type: string
     type: object
+  cmd_api.healthCheckResponse:
+    properties:
+      db:
+        $ref: '#/definitions/github_com_myselfBZ_reserv-service_internal_store.HealthInfo'
+      deployed_at:
+        type: string
+      status:
+        type: string
+    type: object
   cmd_api.itemPayload:
     properties:
       product_id:
@@ -108,6 +117,19 @@ definitions:
     - email
     - first_name
     - password
+    type: object
+  github_com_myselfBZ_reserv-service_internal_store.HealthInfo:
+    properties:
+      idle_conns:
+        type: integer
+      in_use:
+        type: integer
+      open_conns:
+        type: integer
+      status:
+        type: string
+      wait_duration:
+        type: string
     type: object
   github_com_myselfBZ_reserv-service_internal_store.Order:
     properties:
@@ -244,6 +266,35 @@ paths:
       summary: Registers a new user
       tags:
       - auth
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Reports service uptime and database health. Admin-only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api.healthCheckResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd_api.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/cmd_api.healthCheckResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Health check
+      tags:
+      - health
   /orders/:
     post:
       consumes:

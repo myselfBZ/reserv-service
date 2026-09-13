@@ -125,6 +125,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/health": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reports service uptime and database health. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/cmd_api.healthCheckResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/cmd_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/cmd_api.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/cmd_api.healthCheckResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/orders/": {
             "post": {
                 "security": [
@@ -463,6 +509,20 @@ const docTemplate = `{
                 }
             }
         },
+        "cmd_api.healthCheckResponse": {
+            "type": "object",
+            "properties": {
+                "db": {
+                    "$ref": "#/definitions/github_com_myselfBZ_reserv-service_internal_store.HealthInfo"
+                },
+                "deployed_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "cmd_api.itemPayload": {
             "type": "object",
             "required": [
@@ -534,6 +594,26 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 72,
                     "minLength": 8
+                }
+            }
+        },
+        "github_com_myselfBZ_reserv-service_internal_store.HealthInfo": {
+            "type": "object",
+            "properties": {
+                "idle_conns": {
+                    "type": "integer"
+                },
+                "in_use": {
+                    "type": "integer"
+                },
+                "open_conns": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "wait_duration": {
+                    "type": "string"
                 }
             }
         },
