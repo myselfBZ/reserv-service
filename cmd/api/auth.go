@@ -3,14 +3,14 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"time"
 
-	"github.com/myselfBZ/reserv-service/internal/auth"
 	"github.com/myselfBZ/reserv-service/internal/store"
 )
 
 type UserWithToken struct {
 	*store.User
-	Tokens *auth.TokenPair `json:"token"`
+	Token string `json:"token"`
 }
 
 type loginPayload struct {
@@ -61,7 +61,7 @@ func (a *api) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pair, err := a.auth.GenerateTokenPair(
-		user.Id.String(), 
+		user.Id.String(),
 		make(map[string]any),
 	)
 
@@ -69,9 +69,18 @@ func (a *api) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 		a.internalServerError(w, r, err)
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh-token",
+		Value:    pair.RefreshToken,
+		Domain:   fmt.Sprintf("localhost:%s", a.cfg.addr),
+		HttpOnly: true,
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	userWithToken := UserWithToken{
-		User:  user,
-		Tokens: pair,
+		User:   user,
+		Token: pair.AccessToken,
 	}
 
 	writeJSON(w, http.StatusCreated, userWithToken)
@@ -87,7 +96,7 @@ func (a *api) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if err := Validate.Struct(p); err != nil {
 		a.logger.Warnw("loginPayload failed on validation", "err", err)
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"error":"json validation failed",
+			"error":   "json validation failed",
 			"details": formatValidationErrors(err),
 		})
 		return
@@ -114,20 +123,36 @@ func (a *api) loginHandler(w http.ResponseWriter, r *http.Request) {
 		a.internalServerError(w, r, err)
 	}
 
-	writeJSON(w, http.StatusOK, &UserWithToken{
-		User: user,
-		Tokens: pair,
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh-token",
+		Value:    pair.RefreshToken,
+		Domain:   fmt.Sprintf("localhost:%s", a.cfg.addr),
+		HttpOnly: true,
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		SameSite: http.SameSiteLaxMode,
 	})
+
+	userWithToken := UserWithToken{
+		User:   user,
+		Token: pair.AccessToken,
+	}
+
+	writeJSON(w, http.StatusOK, userWithToken)
 }
 
 func (a *api) refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
-	token := r.Header.Get("X-Refresh-Token")
-	if token == "" {
-		a.unauthorizedErrorResponse(w, r, fmt.Errorf("refresh token missing"))
+	c, err := r.Cookie("refresh-token")
+	if err != nil {
+		a.unauthorizedErrorResponse(w, r, err)
 		return
 	}
-	tok, err := a.auth.ValidateRefreshToken(token)
+	tok, err := a.auth.ValidateRefreshToken(c.Value)
 	if err != nil {
+		http.SetCookie(w, &http.Cookie{
+			Name: "refresh-token",
+			Value: "",
+			MaxAge: -1,
+		})
 		a.unauthorizedErrorResponse(w, r, fmt.Errorf("invalid token"))
 		return
 	}
@@ -148,17 +173,25 @@ func (a *api) refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := a.auth.GenerateTokenPair(user.Id.String(), make(map[string]any))
+	pair, err := a.auth.GenerateTokenPair(user.Id.String(), make(map[string]any))
 	if err != nil {
 		a.internalServerError(w, r, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, UserWithToken{
-		User: user,
-		Tokens: tokens,
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh-token",
+		Value:    pair.RefreshToken,
+		Domain:   fmt.Sprintf("localhost:%s", a.cfg.addr),
+		HttpOnly: true,
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		SameSite: http.SameSiteLaxMode,
 	})
+
+	userWithToken := UserWithToken{
+		User:   user,
+		Token: pair.AccessToken,
+	}
+
+	writeJSON(w, http.StatusCreated, userWithToken)
 }
-
-
-
